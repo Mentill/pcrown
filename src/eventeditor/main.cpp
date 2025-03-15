@@ -32,7 +32,7 @@
 
 // Program Name/version Strings
 #define PROG_NAME "Princess Crown Event Editor"
-#define PROG_VERSION "v0.1"
+#define PROG_VERSION "v0.2"
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -55,6 +55,7 @@ bool checkforlinespills=false;
 
 bool tt_changes=false;
 bool dupe_trans=false;
+bool debug_mode = false;
 
 HWND hWindow;
 easythread_struct *et_dump=NULL;
@@ -357,6 +358,11 @@ int main(int argc, char *argv[])
 			strcpy_s(out_filename, sizeof(out_filename), argv[i+1]);
 			i++;
 		}
+	        else if (strcmp(argv[i], "-debug") == 0)
+	        {
+	            debug_mode = true;
+	        }
+		
 	}
 
 	// Load font settings
