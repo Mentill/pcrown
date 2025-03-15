@@ -22,6 +22,7 @@
 
 extern bool sortcmd;
 extern bool dupe_trans;
+extern bool debug_mode;
 
 typedef struct
 {
