@@ -58,6 +58,7 @@ typedef struct
 evn_header_struct header;
 
 unsigned char cmd43_var=0xFF;
+bool cmd71_flag = false;
 int special_flags=0;
 char **pattern_list=NULL;
 int num_patterns=0;
@@ -208,13 +209,14 @@ int DoCommandParse(int cmd, char *name, unsigned char *buf, int size, BOOL count
       memcpy(command->arg, buf, command->arg_length);
       command->list_func = list_func;
    }
-   #ifdef DEBUG_MODE
+   if (debug_mode)
+   {
       printf("\n--- command parsed:\n");
       printf("name: %s\n", name );
       printf("value: ");
       print_hex2str(command->arg, command->arg_length);
       printf("offset: %X\n", (int)(buf-event_data)-1 );
-   #endif
+   }
    return size;
 }
 
@@ -228,8 +230,17 @@ int EVNParse(unsigned char *evn_buf, int index, BOOL count_events, command_struc
       case 0x00: // Jump command
       {
          int offset=DoubleWordSwap(*((unsigned long *)(evn_buf+index)));
+         int arg_len = 4;
 
-         index += DoCommandParse(cmd, "Jump", evn_buf+index, 4, count_events, jump_list_func, command);
+         if (evn_buf[index+1])  //nonzero 2nd argument
+            arg_len = evn_buf[index + 1];      //fixes 041_00_1, might break others
+         if (DoubleWordSwap(*((unsigned long*)(evn_buf + index - 3))) == 0) //0x00000000 padding detected, including command & previous two (timing) bytes
+         {
+            arg_len = 1;
+            offset = 0;
+         }
+         index += DoCommandParse(cmd, "Jump", evn_buf+index, arg_len, count_events, jump_list_func, command);
+
          if (offset == 0)
             return -1;
 
@@ -635,7 +646,14 @@ int EVNParse(unsigned char *evn_buf, int index, BOOL count_events, command_struc
          index += DoCommandParse(cmd, "CMD70", evn_buf+index, 2, count_events, null_list_func, command);
          break;
       case 0x71: // ??
-         index += DoCommandParse(cmd, "CMD71", evn_buf+index, 2, count_events, null_list_func, command);
+	 int arg_len = 3;
+         if (!cmd71_flag)    //first instance takes 2 arguments, fixes 041_00_1
+         {
+              cmd71_flag = true;
+              arg_len = 2;
+         }
+
+         index += DoCommandParse(cmd, "CMD71", evn_buf+index, arg_len, count_events, null_list_func, command);
          break;
       case 0x72: // Stub
          index += DoCommandParse(cmd, "Null7", evn_buf+index, 1, count_events, null_list_func, command);
@@ -650,7 +668,7 @@ int EVNParse(unsigned char *evn_buf, int index, BOOL count_events, command_struc
          index += DoCommandParse(cmd, "CMD75", evn_buf+index, 0, count_events, null_list_func, command);
          break;
       case 0x76: // ??
-         index += DoCommandParse(cmd, "CMD76", evn_buf+index, 6, count_events, null_list_func, command);
+         index += DoCommandParse(cmd, "CMD76", evn_buf+index, 5, count_events, null_list_func, command);
          break;
       case 0x77: // ??
          index += DoCommandParse(cmd, "CMD77", evn_buf+index, 0, count_events, null_list_func, command);
@@ -715,7 +733,7 @@ int EVNParse(unsigned char *evn_buf, int index, BOOL count_events, command_struc
       
       default:
          {
-            printf("Unknown command %02X at offset %08X\n", cmd, index);
+            printf("Unknown command %02X at offset %08X\n", cmd, index-1); //actual command address
             /*
             char tempstr[512];
             if (count_events)
@@ -951,9 +969,8 @@ void CompressCheckWriteMagicNumber(unsigned char *enc_count, unsigned char *magi
 {
    if (enc_count[0] == 4)
    {
-      #ifdef DEBUG_MODE
+      if (debug_mode)
          printf("%02X", (unsigned char)magic_number[0]);
-      #endif
       
       outbuf[0][0] = magic_number[0];
       outbuf[0]++;
@@ -965,9 +982,8 @@ void CompressCheckWriteMagicNumber(unsigned char *enc_count, unsigned char *magi
 
 void CompressAddWord(unsigned short word, unsigned char **outbuf, int *out_size, unsigned char *magic_number, unsigned char *enc_count)
 {
-   #ifdef DEBUG_MODE
+   if (debug_mode)
       printf("%02X", (unsigned char)word);
-   #endif
       
    outbuf[0][0] = (unsigned char)word;  // truncate upper byte
    outbuf[0]++;
@@ -1481,14 +1497,15 @@ unsigned short *CompressText(int cur_cmd43_var, unsigned char *outbuf, int *out_
 		}
   */
       
-      #ifdef DEBUG_MODE
-         printf("\nevent_id: %d\n", event_id );
-         printf("text_pointer_list index: %d\n", l );
-         printf("text: %s\n", text );
-         printf("compressed: ");
-         //printf("\nnum_text: %d\n", num_text );
-      #endif
-      
+	        if (debug_mode)
+	        {
+	           printf("\nevent_id: %d\n", event_id );
+	           printf("text_pointer_list index: %d\n", l );
+	           printf("text: %s\n", text );
+	           printf("compressed: ");
+	           //printf("\nnum_text: %d\n", num_text );
+	        }
+	   
 		// Create new entry for pointer
 		text_pointer_list[l] = out_size[0];
 		for (i = 0; i < strlen(text);)
