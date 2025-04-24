@@ -45,6 +45,7 @@ textdataheader_struct textdataheader;
 transtext_struct maintranstext;
 ttentry_struct *names_data=NULL;
 unsigned long num_names=0;
+short comp_data_table_offset;
 
 typedef struct 
 {
@@ -767,7 +768,8 @@ int EVNLoadFile(const char *filename)
 
    EVNParseHeader(event_data+0x1000, &header);
    buf = event_data;
-
+   comp_data_table_offset = event_data[0x100e]*256 + event_data[0x100f] + 0x1000;
+	
    index = 0;
    while (!done)
    {
@@ -782,6 +784,9 @@ int EVNLoadFile(const char *filename)
       }
 
       index = EVNParse(event_data, index, FALSE, &cmd);
+      if (index >= comp_data_table_offset)
+         done = true;
+      
       if (index < 0)
       {
          if (index != -2)
@@ -840,6 +845,9 @@ int EVNLoadFile(const char *filename)
                }
 
                if (i != list_size-1 && (index+2) >= 0x1000+header.offsets1[list[i+1]])
+                  break;
+
+	       if (index >= comp_data_table_offset)
                   break;
             }
          }
